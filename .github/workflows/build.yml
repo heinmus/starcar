@@ -24,9 +24,6 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Repair Android Native Files
-        run: flutter create --platforms android .
-
       - name: Get dependencies
         run: flutter pub get
 
