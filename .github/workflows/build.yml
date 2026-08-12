@@ -23,14 +23,21 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Install Dependencies
-        run: flutter pub get
-
-      - name: Build Android APK
-        run: flutter build apk --release --no-tree-shake-icons
+      - name: Locate Flutter Project Directory and Build
+        run: |
+          # Procura a pasta onde está o arquivo pubspec.yaml
+          PUBSPEC_DIR=$(find . -maxdepth 2 -name "pubspec.yaml" -exec dirname {} \;)
+          echo "Projeto localizado em: $PUBSPEC_DIR"
+          cd "$PUBSPEC_DIR"
+          flutter pub get
+          flutter build apk --release --no-tree-shake-icons
+          
+          # Copia o APK gerado para a raiz do build para o upload encontrar
+          mkdir -p $GITHUB_WORKSPACE/output
+          cp build/app/outputs/flutter-apk/app-release.apk $GITHUB_WORKSPACE/output/app-release.apk
 
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
           name: release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: output/app-release.apk
