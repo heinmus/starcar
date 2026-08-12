@@ -40,14 +40,15 @@ class _CatalogScreenState extends State<CatalogScreen> {
   bool isLoading = true;
   bool isSearching = false;
 
-  // CONFIGURE O NÚMERO DO WHATSAPP DA LOJA AQUI (Com DDD e 55 do Brasil)
   final String whatsappNumber = "5581999999999"; 
+  final String apiUrl = "https://script.google.com/macros/s/AKfycby4LDzvV2HfMgLrsENcqfmXaF71FWsCfSC7WOAZuvu7Q7YfwZMo8zYF2ejmRiDLjpTb/exec";
 
   List<Map<String, dynamic>> vehicles = [];
   List<Map<String, dynamic>> filteredVehicles = [];
+  List<String> availableStores = ["Todas"];
+  String selectedStore = "Todas";
 
   final TextEditingController searchController = TextEditingController();
-  final String apiUrl = "https://script.google.com/macros/s/AKfycby4LDzvV2HfMgLrsENcqfmXaF71FWsCfSC7WOAZuvu7Q7YfwZMo8zYF2ejmRiDLjpTb/exec";
 
   @override
   void initState() {
@@ -61,9 +62,19 @@ class _CatalogScreenState extends State<CatalogScreen> {
       final response = await http.get(Uri.parse(apiUrl));
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
+        final List<Map<String, dynamic>> loadedVehicles = List<Map<String, dynamic>>.from(data);
+        
+        Set<String> storesSet = {"Todas"};
+        for (var car in loadedVehicles) {
+          if (car['store'] != null && car['store'].toString().isNotEmpty) {
+            storesSet.add(car['store'].toString());
+          }
+        }
+
         setState(() {
-          vehicles = List<Map<String, dynamic>>.from(data);
-          filteredVehicles = vehicles;
+          vehicles = loadedVehicles;
+          availableStores = storesSet.toList();
+          _applyFilters();
           isLoading = false;
         });
       }
@@ -72,23 +83,24 @@ class _CatalogScreenState extends State<CatalogScreen> {
     }
   }
 
-  void _filterVehicles(String query) {
+  void _applyFilters() {
     setState(() {
-      if (query.isEmpty) {
-        filteredVehicles = vehicles;
-      } else {
-        filteredVehicles = vehicles.where((car) {
-          final title = car['title'].toString().toLowerCase();
-          final year = car['year'].toString().toLowerCase();
-          final input = query.toLowerCase();
-          return title.contains(input) || year.contains(input);
-        }).toList();
-      }
+      String query = searchController.text.toLowerCase();
+      filteredVehicles = vehicles.where((car) {
+        bool matchesStore = (selectedStore == "Todas") || 
+            (car['store'].toString().toLowerCase() == selectedStore.toLowerCase());
+        
+        bool matchesSearch = query.isEmpty || 
+            car['title'].toString().toLowerCase().contains(query) || 
+            car['year'].toString().toLowerCase().contains(query);
+
+        return matchesStore && matchesSearch;
+      }).toList();
     });
   }
 
   Future<void> _openWhatsApp(Map<String, dynamic> car) async {
-    final String message = "Olá! Gostaria de mais informações sobre o veículo *${car['title']}* (${car['year']}) - Valor: ${car['price']}.";
+    final String message = "Olá! Gostaria de mais informações sobre o veículo *${car['title']}* (${car['year']}) da loja *${car['store']}* - Valor: ${car['price']}.";
     final Uri url = Uri.parse("https://wa.me/$whatsappNumber?text=${Uri.encodeComponent(message)}");
 
     if (await canLaunchUrl(url)) {
@@ -102,7 +114,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
     }
   }
 
-  Future<void> addVehicle(String title, String year, String price, String km, String image) async {
+  Future<void> addVehicle(String title, String year, String price, String km, String image, String store) async {
     try {
       await http.post(
         Uri.parse(apiUrl),
@@ -114,6 +126,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
           "price": price,
           "km": km,
           "image": image,
+          "store": store,
         }),
       );
       fetchVehicles();
@@ -122,7 +135,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
     }
   }
 
-  Future<void> updateVehicle(int rowIndex, String title, String year, String price, String km, String image) async {
+  Future<void> updateVehicle(int rowIndex, String title, String year, String price, String km, String image, String store) async {
     try {
       await http.post(
         Uri.parse(apiUrl),
@@ -135,6 +148,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
           "price": price,
           "km": km,
           "image": image,
+          "store": store,
         }),
       );
       fetchVehicles();
@@ -165,6 +179,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
     final priceController = TextEditingController();
     final kmController = TextEditingController();
     final imageController = TextEditingController();
+    final storeController = TextEditingController(text: selectedStore == "Todas" ? "Matriz" : selectedStore);
 
     showDialog(
       context: context,
@@ -175,6 +190,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              TextField(controller: storeController, decoration: const InputDecoration(labelText: 'Nome da Loja/Unidade')),
               TextField(controller: titleController, decoration: const InputDecoration(labelText: 'Modelo/Nome')),
               TextField(controller: yearController, decoration: const InputDecoration(labelText: 'Ano (ex: 2022/2023)')),
               TextField(controller: priceController, decoration: const InputDecoration(labelText: 'Preço (ex: R\$ 50.000)')),
@@ -196,6 +212,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                 priceController.text,
                 kmController.text,
                 imageController.text,
+                storeController.text,
               );
               Navigator.pop(context);
             },
@@ -207,6 +224,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
   }
 
   void _showEditVehicleDialog(Map<String, dynamic> car) {
+    final storeController = TextEditingController(text: car['store']?.toString() ?? 'Matriz');
     final titleController = TextEditingController(text: car['title'].toString());
     final yearController = TextEditingController(text: car['year'].toString());
     final priceController = TextEditingController(text: car['price'].toString());
@@ -222,6 +240,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              TextField(controller: storeController, decoration: const InputDecoration(labelText: 'Nome da Loja/Unidade')),
               TextField(controller: titleController, decoration: const InputDecoration(labelText: 'Modelo/Nome')),
               TextField(controller: yearController, decoration: const InputDecoration(labelText: 'Ano')),
               TextField(controller: priceController, decoration: const InputDecoration(labelText: 'Preço')),
@@ -244,6 +263,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                 priceController.text,
                 kmController.text,
                 imageController.text,
+                storeController.text,
               );
               Navigator.pop(context);
             },
@@ -269,7 +289,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   hintStyle: TextStyle(color: Colors.white54),
                   border: InputBorder.none,
                 ),
-                onChanged: _filterVehicles,
+                onChanged: (_) => _applyFilters(),
               )
             : const Text('StarCar'),
         actions: [
@@ -280,7 +300,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                 if (isSearching) {
                   isSearching = false;
                   searchController.clear();
-                  filteredVehicles = vehicles;
+                  _applyFilters();
                 } else {
                   isSearching = true;
                 }
@@ -300,94 +320,146 @@ class _CatalogScreenState extends State<CatalogScreen> {
           ),
         ],
       ),
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : filteredVehicles.isEmpty
-              ? const Center(child: Text('Nenhum veículo encontrado.'))
-              : GridView.builder(
-                  padding: const EdgeInsets.all(12),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    childAspectRatio: 0.68,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
+      body: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            color: const Color(0xFF0F172A),
+            child: Row(
+              children: [
+                const Icon(Icons.store, color: Colors.amber, size: 20),
+                const SizedBox(width: 8),
+                const Text('Loja:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: DropdownButton<String>(
+                    value: selectedStore,
+                    isExpanded: true,
+                    dropdownColor: const Color(0xFF1E293B),
+                    style: const TextStyle(color: Colors.white),
+                    items: availableStores.map((String store) {
+                      return DropdownMenuItem<String>(
+                        value: store,
+                        child: Text(store),
+                      );
+                    }).toList(),
+                    onChanged: (String? newValue) {
+                      if (newValue != null) {
+                        setState(() {
+                          selectedStore = newValue;
+                          _applyFilters();
+                        });
+                      }
+                    },
                   ),
-                  itemCount: filteredVehicles.length,
-                  itemBuilder: (context, index) {
-                    final item = filteredVehicles[index];
-                    return Card(
-                      color: const Color(0xFF1E293B),
-                      child: Stack(
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Image.network(
-                                  item['image'].toString(),
-                                  fit: BoxFit.cover,
-                                  width: double.infinity,
-                                  errorBuilder: (context, error, stackTrace) =>
-                                      const Icon(Icons.directions_car, size: 50),
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.all(8.0),
-                                child: Column(
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : filteredVehicles.isEmpty
+                    ? const Center(child: Text('Nenhum veículo encontrado para esta loja.'))
+                    : GridView.builder(
+                        padding: const EdgeInsets.all(12),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          childAspectRatio: 0.65,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                        ),
+                        itemCount: filteredVehicles.length,
+                        itemBuilder: (context, index) {
+                          final item = filteredVehicles[index];
+                          return Card(
+                            color: const Color(0xFF1E293B),
+                            child: Stack(
+                              children: [
+                                Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(item['title'].toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
-                                    Text('${item['year']} • ${item['km']}', style: const TextStyle(fontSize: 12, color: Colors.white54)),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      isPresentationMode ? 'Sob Consulta' : item['price'].toString(),
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: isPresentationMode ? Colors.amber : Colors.greenAccent,
+                                    Expanded(
+                                      child: Image.network(
+                                        item['image'].toString(),
+                                        fit: BoxFit.cover,
+                                        width: double.infinity,
+                                        errorBuilder: (context, error, stackTrace) =>
+                                            const Icon(Icons.directions_car, size: 50),
                                       ),
                                     ),
-                                    const SizedBox(height: 8),
-                                    SizedBox(
-                                      width: double.infinity,
-                                      child: ElevatedButton.icon(
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(0xFF25D366),
-                                          foregroundColor: Colors.white,
-                                          padding: const EdgeInsets.symmetric(vertical: 4),
-                                        ),
-                                        onPressed: () => _openWhatsApp(item),
-                                        icon: const Icon(Icons.chat, size: 16),
-                                        label: const Text('Falar na Loja', style: TextStyle(fontSize: 12)),
+                                    Padding(
+                                      padding: const EdgeInsets.all(8.0),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: Colors.amber.withOpacity(0.2),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              item['store']?.toString() ?? 'Geral',
+                                              style: const TextStyle(fontSize: 10, color: Colors.amber, fontWeight: FontWeight.bold),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(item['title'].toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                                          Text('${item['year']} • ${item['km']}', style: const TextStyle(fontSize: 12, color: Colors.white54)),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            isPresentationMode ? 'Sob Consulta' : item['price'].toString(),
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              color: isPresentationMode ? Colors.amber : Colors.greenAccent,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          SizedBox(
+                                            width: double.infinity,
+                                            child: ElevatedButton.icon(
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: const Color(0xFF25D366),
+                                                foregroundColor: Colors.white,
+                                                padding: const EdgeInsets.symmetric(vertical: 4),
+                                              ),
+                                              onPressed: () => _openWhatsApp(item),
+                                              icon: const Icon(Icons.chat, size: 16),
+                                              label: const Text('Falar na Loja', style: TextStyle(fontSize: 12)),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ],
                                 ),
-                              ),
-                            ],
-                          ),
-                          if (!isPresentationMode)
-                            Positioned(
-                              top: 4,
-                              right: 4,
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.edit, color: Colors.amber, size: 20),
-                                    onPressed: () => _showEditVehicleDialog(item),
+                                if (!isPresentationMode)
+                                  Positioned(
+                                    top: 4,
+                                    right: 4,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(Icons.edit, color: Colors.amber, size: 20),
+                                          onPressed: () => _showEditVehicleDialog(item),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.delete, color: Colors.redAccent, size: 20),
+                                          onPressed: () => deleteVehicle(item['rowIndex']),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete, color: Colors.redAccent, size: 20),
-                                    onPressed: () => deleteVehicle(item['rowIndex']),
-                                  ),
-                                ],
-                              ),
+                              ],
                             ),
-                        ],
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddVehicleDialog,
         backgroundColor: Colors.amber,
