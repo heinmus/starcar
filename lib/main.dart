@@ -103,6 +103,27 @@ class _CatalogScreenState extends State<CatalogScreen> {
     }
   }
 
+  Future<void> updateVehicle(int rowIndex, String title, String year, String price, String km, String image) async {
+    try {
+      await http.post(
+        Uri.parse(apiUrl),
+        headers: {"Content-Type": "application/json"},
+        body: json.encode({
+          "action": "update",
+          "rowIndex": rowIndex,
+          "title": title,
+          "year": year,
+          "price": price,
+          "km": km,
+          "image": image,
+        }),
+      );
+      fetchVehicles();
+    } catch (e) {
+      // Tratar excecao
+    }
+  }
+
   Future<void> deleteVehicle(int rowIndex) async {
     try {
       await http.post(
@@ -160,6 +181,54 @@ class _CatalogScreenState extends State<CatalogScreen> {
               Navigator.pop(context);
             },
             child: const Text('Salvar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditVehicleDialog(Map<String, dynamic> car) {
+    final titleController = TextEditingController(text: car['title'].toString());
+    final yearController = TextEditingController(text: car['year'].toString());
+    final priceController = TextEditingController(text: car['price'].toString());
+    final kmController = TextEditingController(text: car['km'].toString());
+    final imageController = TextEditingController(text: car['image'].toString());
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        title: const Text('Editar Veículo'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: titleController, decoration: const InputDecoration(labelText: 'Modelo/Nome')),
+              TextField(controller: yearController, decoration: const InputDecoration(labelText: 'Ano')),
+              TextField(controller: priceController, decoration: const InputDecoration(labelText: 'Preço')),
+              TextField(controller: kmController, decoration: const InputDecoration(labelText: 'Quilometragem')),
+              TextField(controller: imageController, decoration: const InputDecoration(labelText: 'URL da Imagem')),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              updateVehicle(
+                car['rowIndex'],
+                titleController.text,
+                yearController.text,
+                priceController.text,
+                kmController.text,
+                imageController.text,
+              );
+              Navigator.pop(context);
+            },
+            child: const Text('Atualizar'),
           ),
         ],
       ),
@@ -267,9 +336,18 @@ class _CatalogScreenState extends State<CatalogScreen> {
                             Positioned(
                               top: 4,
                               right: 4,
-                              child: IconButton(
-                                icon: const Icon(Icons.delete, color: Colors.redAccent),
-                                onPressed: () => deleteVehicle(item['rowIndex']),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.edit, color: Colors.amber, size: 20),
+                                    onPressed: () => _showEditVehicleDialog(item),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete, color: Colors.redAccent, size: 20),
+                                    onPressed: () => deleteVehicle(item['rowIndex']),
+                                  ),
+                                ],
                               ),
                             ),
                         ],
