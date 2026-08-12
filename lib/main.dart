@@ -1,4 +1,4 @@
-import 'dart:convert';
+import 'dart0:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
@@ -39,6 +39,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
   bool isPresentationMode = false;
   bool isLoading = true;
   bool isSearching = false;
+  int currentTabIndex = 0; // 0: Veículos, 1: Lojas
 
   final String whatsappNumber = "5581999999999"; 
   final String apiUrl = "https://script.google.com/macros/s/AKfycby4LDzvV2HfMgLrsENcqfmXaF71FWsCfSC7WOAZuvu7Q7YfwZMo8zYF2ejmRiDLjpTb/exec";
@@ -66,8 +67,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
         
         Set<String> storesSet = {"Todas"};
         for (var car in loadedVehicles) {
-          if (car['store'] != null && car['store'].toString().isNotEmpty) {
-            storesSet.add(car['store'].toString());
+          if (car['store'] != null && car['store'].toString().trim().isNotEmpty) {
+            storesSet.add(car['store'].toString().trim());
           }
         }
 
@@ -85,18 +86,33 @@ class _CatalogScreenState extends State<CatalogScreen> {
 
   void _applyFilters() {
     setState(() {
-      String query = searchController.text.toLowerCase();
+      String query = searchController.text.toLowerCase().trim();
+      
       filteredVehicles = vehicles.where((car) {
-        bool matchesStore = (selectedStore == "Todas") || 
-            (car['store'].toString().toLowerCase() == selectedStore.toLowerCase());
-        
-        bool matchesSearch = query.isEmpty || 
-            car['title'].toString().toLowerCase().contains(query) || 
-            car['year'].toString().toLowerCase().contains(query);
+        String carStore = car['store']?.toString().toLowerCase() ?? 'geral';
+        String carTitle = car['title']?.toString().toLowerCase() ?? '';
+        String carYear = car['year']?.toString().toLowerCase() ?? '';
 
-        return matchesStore && matchesSearch;
+        bool matchesDropdownStore = (selectedStore == "Todas") || 
+            (carStore == selectedStore.toLowerCase());
+        
+        bool matchesSearchQuery = query.isEmpty || 
+            carTitle.contains(query) || 
+            carYear.contains(query) || 
+            carStore.contains(query);
+
+        return matchesDropdownStore && matchesSearchQuery;
       }).toList();
     });
+  }
+
+  Map<String, int> getStoreCountsForSearch() {
+    Map<String, int> counts = {};
+    for (var car in filteredVehicles) {
+      String store = car['store']?.toString() ?? 'Geral';
+      counts[store] = (counts[store] ?? 0) + 1;
+    }
+    return counts;
   }
 
   Future<void> _openWhatsApp(Map<String, dynamic> car) async {
@@ -274,6 +290,82 @@ class _CatalogScreenState extends State<CatalogScreen> {
     );
   }
 
+  Widget _buildSearchResultsSummary() {
+    if (searchController.text.trim().isEmpty) return const SizedBox.shrink();
+
+    final storeCounts = getStoreCountsForSearch();
+    final totalFound = filteredVehicles.length;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.amber.withOpacity(0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Encontrado(s) $totalFound veículo(s) para "${searchController.text}":',
+            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.amber),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: storeCounts.entries.map((entry) {
+              return Chip(
+                backgroundColor: const Color(0xFF0F172A),
+                side: const BorderSide(color: Colors.white24),
+                label: Text(
+                  '${entry.key}: ${entry.value}',
+                  style: const TextStyle(fontSize: 12, color: Colors.white),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStoresListView() {
+    List<String> storesList = availableStores.where((s) => s != "Todas").toList();
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(12),
+      itemCount: storesList.length,
+      itemBuilder: (context, index) {
+        String storeName = storesList[index];
+        int vehicleCount = vehicles.where((v) => v['store']?.toString().toLowerCase() == storeName.toLowerCase()).toList().length;
+
+        return Card(
+          color: const Color(0xFF1E293B),
+          margin: const EdgeInsets.only(bottom: 12),
+          child: ListTile(
+            leading: const CircleAvatar(
+              backgroundColor: Colors.amber,
+              child: Icon(Icons.store, color: Colors.black),
+            ),
+            title: Text(storeName, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+            subtitle: Text('$vehicleCount veículo(s) em estoque', style: const TextStyle(color: Colors.white60)),
+            trailing: const Icon(Icons.arrow_forward_ios, color: Colors.amber, size: 16),
+            onTap: () {
+              setState(() {
+                selectedStore = storeName;
+                currentTabIndex = 0;
+                _applyFilters();
+              });
+            },
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -285,7 +377,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                 autofocus: true,
                 style: const TextStyle(color: Colors.white),
                 decoration: const InputDecoration(
-                  hintText: 'Buscar por modelo ou ano...',
+                  hintText: 'Digite o modelo (ex: civic)...',
                   hintStyle: TextStyle(color: Colors.white54),
                   border: InputBorder.none,
                 ),
@@ -322,6 +414,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
       ),
       body: Column(
         children: [
+          // Seletor de Loja no Topo
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             color: const Color(0xFF0F172A),
@@ -329,7 +422,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
               children: [
                 const Icon(Icons.store, color: Colors.amber, size: 20),
                 const SizedBox(width: 8),
-                const Text('Loja:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text('Filtro Loja:', style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(width: 12),
                 Expanded(
                   child: DropdownButton<String>(
@@ -356,107 +449,144 @@ class _CatalogScreenState extends State<CatalogScreen> {
               ],
             ),
           ),
+
+          // Resumo da Pesquisa
+          _buildSearchResultsSummary(),
+
+          // Conteúdo da Aba
           Expanded(
             child: isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : filteredVehicles.isEmpty
-                    ? const Center(child: Text('Nenhum veículo encontrado para esta loja.'))
-                    : GridView.builder(
-                        padding: const EdgeInsets.all(12),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          childAspectRatio: 0.65,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                        ),
-                        itemCount: filteredVehicles.length,
-                        itemBuilder: (context, index) {
-                          final item = filteredVehicles[index];
-                          return Card(
-                            color: const Color(0xFF1E293B),
-                            child: Stack(
-                              children: [
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                : currentTabIndex == 1
+                    ? _buildStoresListView()
+                    : filteredVehicles.isEmpty
+                        ? const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(16.0),
+                              child: Text(
+                                'Nenhum veículo encontrado.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Colors.white70),
+                              ),
+                            ),
+                          )
+                        : GridView.builder(
+                            padding: const EdgeInsets.all(12),
+                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              childAspectRatio: 0.65,
+                              crossAxisSpacing: 12,
+                              mainAxisSpacing: 12,
+                            ),
+                            itemCount: filteredVehicles.length,
+                            itemBuilder: (context, index) {
+                              final item = filteredVehicles[index];
+                              return Card(
+                                color: const Color(0xFF1E293B),
+                                child: Stack(
                                   children: [
-                                    Expanded(
-                                      child: Image.network(
-                                        item['image'].toString(),
-                                        fit: BoxFit.cover,
-                                        width: double.infinity,
-                                        errorBuilder: (context, error, stackTrace) =>
-                                            const Icon(Icons.directions_car, size: 50),
-                                      ),
-                                    ),
-                                    Padding(
-                                      padding: const EdgeInsets.all(8.0),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: Colors.amber.withOpacity(0.2),
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                            child: Text(
-                                              item['store']?.toString() ?? 'Geral',
-                                              style: const TextStyle(fontSize: 10, color: Colors.amber, fontWeight: FontWeight.bold),
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(item['title'].toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
-                                          Text('${item['year']} • ${item['km']}', style: const TextStyle(fontSize: 12, color: Colors.white54)),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            isPresentationMode ? 'Sob Consulta' : item['price'].toString(),
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              color: isPresentationMode ? Colors.amber : Colors.greenAccent,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 8),
-                                          SizedBox(
-                                            width: double.infinity,
-                                            child: ElevatedButton.icon(
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: const Color(0xFF25D366),
-                                                foregroundColor: Colors.white,
-                                                padding: const EdgeInsets.symmetric(vertical: 4),
-                                              ),
-                                              onPressed: () => _openWhatsApp(item),
-                                              icon: const Icon(Icons.chat, size: 16),
-                                              label: const Text('Falar na Loja', style: TextStyle(fontSize: 12)),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                if (!isPresentationMode)
-                                  Positioned(
-                                    top: 4,
-                                    right: 4,
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        IconButton(
-                                          icon: const Icon(Icons.edit, color: Colors.amber, size: 20),
-                                          onPressed: () => _showEditVehicleDialog(item),
+                                        Expanded(
+                                          child: Image.network(
+                                            item['image'].toString(),
+                                            fit: BoxFit.cover,
+                                            width: double.infinity,
+                                            errorBuilder: (context, error, stackTrace) =>
+                                                const Icon(Icons.directions_car, size: 50),
+                                          ),
                                         ),
-                                        IconButton(
-                                          icon: const Icon(Icons.delete, color: Colors.redAccent, size: 20),
-                                          onPressed: () => deleteVehicle(item['rowIndex']),
+                                        Padding(
+                                          padding: const EdgeInsets.all(8.0),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.amber.withOpacity(0.2),
+                                                  borderRadius: BorderRadius.circular(4),
+                                                ),
+                                                child: Text(
+                                                  item['store']?.toString() ?? 'Geral',
+                                                  style: const TextStyle(fontSize: 10, color: Colors.amber, fontWeight: FontWeight.bold),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(item['title'].toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                                              Text('${item['year']} • ${item['km']}', style: const TextStyle(fontSize: 12, color: Colors.white54)),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                isPresentationMode ? 'Sob Consulta' : item['price'].toString(),
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  color: isPresentationMode ? Colors.amber : Colors.greenAccent,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 8),
+                                              SizedBox(
+                                                width: double.infinity,
+                                                child: ElevatedButton.icon(
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor: const Color(0xFF25D366),
+                                                    foregroundColor: Colors.white,
+                                                    padding: const EdgeInsets.symmetric(vertical: 4),
+                                                  ),
+                                                  onPressed: () => _openWhatsApp(item),
+                                                  icon: const Icon(Icons.chat, size: 16),
+                                                  label: const Text('Falar na Loja', style: TextStyle(fontSize: 12)),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                       ],
                                     ),
-                                  ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
+                                    if (!isPresentationMode)
+                                      Positioned(
+                                        top: 4,
+                                        right: 4,
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            IconButton(
+                                              icon: const Icon(Icons.edit, color: Colors.amber, size: 20),
+                                              onPressed: () => _showEditVehicleDialog(item),
+                                            ),
+                                            IconButton(
+                                              icon: const Icon(Icons.delete, color: Colors.redAccent, size: 20),
+                                              onPressed: () => deleteVehicle(item['rowIndex']),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        backgroundColor: const Color(0xFF1E293B),
+        selectedItemColor: Colors.amber,
+        unselectedItemColor: Colors.white54,
+        currentIndex: currentTabIndex,
+        onTap: (index) {
+          setState(() {
+            currentTabIndex = index;
+          });
+        },
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.directions_car),
+            label: 'Veículos',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.storefront),
+            label: 'Lojas',
           ),
         ],
       ),
