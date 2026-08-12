@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 void main() {
   runApp(const StarCarApp());
@@ -34,173 +36,205 @@ class CatalogScreen extends StatefulWidget {
 
 class _CatalogScreenState extends State<CatalogScreen> {
   bool isPresentationMode = false;
+  bool isLoading = true;
+  List<Map<String, dynamic>> vehicles = [];
 
-  final List<Map<String, String>> vehicles = [
-    {
-      'title': 'Fiat Strada Volcano',
-      'year': '2022/2023',
-      'price': 'R\$ 98.900',
-      'km': '32.000 km',
-      'image': 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&w=600&q=80',
-    },
-    {
-      'title': 'VW Gol 1.0 MC',
-      'year': '2021/2021',
-      'price': 'R\$ 54.500',
-      'km': '48.000 km',
-      'image': 'https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?auto=format&fit=crop&w=600&q=80',
-    },
-    {
-      'title': 'Renault Sandero Stepway',
-      'year': '2020/2021',
-      'price': 'R\$ 59.900',
-      'km': '55.000 km',
-      'image': 'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=600&q=80',
-    },
-    {
-      'title': 'Royal Enfield Meteor 350',
-      'year': '2023/2023',
-      'price': 'R\$ 23.900',
-      'km': '8.500 km',
-      'image': 'https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=600&q=80',
-    },
-  ];
+  final String apiUrl = "https://script.google.com/macros/s/AKfycby4LDzvV2HfMgLrsENcqfmXaF71FWsCfSC7WOAZuvu7Q7YfwZMo8zYF2ejmRiDLjpTb/exec";
+
+  @override
+  void initState() {
+    super.initState();
+    fetchVehicles();
+  }
+
+  Future<void> fetchVehicles() async {
+    setState(() => isLoading = true);
+    try {
+      final response = await http.get(Uri.parse(apiUrl));
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        setState(() {
+          vehicles = List<Map<String, dynamic>>.from(data);
+          isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() => isLoading = false);
+    }
+  }
+
+  Future<void> addVehicle(String title, String year, String price, String km, String image) async {
+    try {
+      await http.post(
+        Uri.parse(apiUrl),
+        headers: {"Content-Type": "application/json"},
+        body: json.encode({
+          "action": "add",
+          "title": title,
+          "year": year,
+          "price": price,
+          "km": km,
+          "image": image,
+        }),
+      );
+      fetchVehicles();
+    } catch (e) {
+      // Tratar exceção
+    }
+  }
+
+  Future<void> deleteVehicle(int rowIndex) async {
+    try {
+      await http.post(
+        Uri.parse(apiUrl),
+        headers: {"Content-Type": "application/json"},
+        body: json.encode({
+          "action": "delete",
+          "rowIndex": rowIndex,
+        }),
+      );
+      fetchVehicles();
+    } catch (e) {
+      // Tratar exceção
+    }
+  }
+
+  void _showAddVehicleDialog() {
+    final titleController = TextEditingController();
+    final yearController = TextEditingController();
+    final priceController = TextEditingController();
+    final kmController = TextEditingController();
+    final imageController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        title: const Text('Cadastrar Novo Veículo'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: titleController, decoration: const InputDecoration(labelText: 'Modelo/Nome')),
+              TextField(controller: yearController, decoration: const InputDecoration(labelText: 'Ano (ex: 2022/2023)')),
+              TextField(controller: priceController, decoration: const InputDecoration(labelText: 'Preço (ex: R\$ 50.000)')),
+              TextField(controller: kmController, decoration: const InputDecoration(labelText: 'Quilometragem (ex: 30.000 km)')),
+              TextField(controller: imageController, decoration: const InputDecoration(labelText: 'URL da Imagem')),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              addVehicle(
+                titleController.text,
+                yearController.text,
+                priceController.text,
+                kmController.text,
+                imageController.text,
+              );
+              Navigator.pop(context);
+            },
+            child: const Text('Salvar'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: const Color(0xFF1E293B),
-        elevation: 0,
-        title: Row(
-          children: [
-            const Icon(Icons.directions_car_filled, color: Colors.amber),
-            const SizedBox(width: 8),
-            Text(
-              'StarCar',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: isPresentationMode ? Colors.amber : Colors.white,
-              ),
-            ),
-          ],
-        ),
+        title: const Text('StarCar'),
         actions: [
           IconButton(
-            tooltip: 'Modo Apresentação (Cliente)',
             icon: Icon(
               isPresentationMode ? Icons.visibility_off : Icons.visibility,
               color: isPresentationMode ? Colors.amber : Colors.white70,
             ),
-            onPressed: () {
-              setState(() {
-                isPresentationMode = !isPresentationMode;
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    isPresentationMode
-                        ? 'Modo Apresentação ATIVADO (Valores ocultos)'
-                        : 'Modo Lojista ATIVADO',
-                  ),
-                  duration: const Duration(seconds: 2),
-                ),
-              );
-            },
+            onPressed: () => setState(() => isPresentationMode = !isPresentationMode),
+          ),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: fetchVehicles,
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          children: [
-            TextField(
-              decoration: InputDecoration(
-                hintText: 'Buscar modelo, ano ou marca...',
-                prefixIcon: const Icon(Icons.search, color: Colors.white54),
-                filled: true,
-                fillColor: const Color(0xFF1E293B),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 0),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: GridView.builder(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  childAspectRatio: 0.72,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                ),
-                itemCount: vehicles.length,
-                itemBuilder: (context, index) {
-                  final item = vehicles[index];
-                  return Card(
-                    color: const Color(0xFF1E293B),
-                    clipBehavior: Clip.antiAlias,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              image: DecorationImage(
-                                image: NetworkImage(item['image']!),
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(10.0),
-                          child: Column(
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : vehicles.isEmpty
+              ? const Center(child: Text('Nenhum veículo cadastrado na planilha.'))
+              : GridView.builder(
+                  padding: const EdgeInsets.all(12),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    childAspectRatio: 0.72,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                  ),
+                  itemCount: vehicles.length,
+                  itemBuilder: (context, index) {
+                    final item = vehicles[index];
+                    return Card(
+                      color: const Color(0xFF1E293B),
+                      child: Stack(
+                        children: [
+                          Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                item['title']!,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                  color: Colors.white,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${item['year']} • ${item['km']}',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.white54,
+                              Expanded(
+                                child: Image.network(
+                                  item['image'].toString(),
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      const Icon(Icons.directions_car, size: 50),
                                 ),
                               ),
-                              const SizedBox(height: 8),
-                              Text(
-                                isPresentationMode ? 'Sob Consulta' : item['price']!,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 15,
-                                  color: isPresentationMode ? Colors.amber : Colors.greenAccent,
+                              Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(item['title'].toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    Text('${item['year']} • ${item['km']}', style: const TextStyle(fontSize: 12, color: Colors.white54)),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      isPresentationMode ? 'Sob Consulta' : item['price'].toString(),
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: isPresentationMode ? Colors.amber : Colors.greenAccent,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
+                          if (!isPresentationMode)
+                            Positioned(
+                              top: 4,
+                              right: 4,
+                              child: IconButton(
+                                icon: const Icon(Icons.delete, color: Colors.redAccent),
+                                onPressed: () => deleteVehicle(item['rowIndex']),
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showAddVehicleDialog,
+        backgroundColor: Colors.amber,
+        child: const Icon(Icons.add, color: Colors.black),
       ),
     );
   }
