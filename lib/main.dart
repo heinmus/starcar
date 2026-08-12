@@ -37,8 +37,12 @@ class CatalogScreen extends StatefulWidget {
 class _CatalogScreenState extends State<CatalogScreen> {
   bool isPresentationMode = false;
   bool isLoading = true;
-  List<Map<String, dynamic>> vehicles = [];
+  bool isSearching = false;
 
+  List<Map<String, dynamic>> vehicles = [];
+  List<Map<String, dynamic>> filteredVehicles = [];
+
+  final TextEditingController searchController = TextEditingController();
   final String apiUrl = "https://script.google.com/macros/s/AKfycby4LDzvV2HfMgLrsENcqfmXaF71FWsCfSC7WOAZuvu7Q7YfwZMo8zYF2ejmRiDLjpTb/exec";
 
   @override
@@ -55,12 +59,28 @@ class _CatalogScreenState extends State<CatalogScreen> {
         final List<dynamic> data = json.decode(response.body);
         setState(() {
           vehicles = List<Map<String, dynamic>>.from(data);
+          filteredVehicles = vehicles;
           isLoading = false;
         });
       }
     } catch (e) {
       setState(() => isLoading = false);
     }
+  }
+
+  void _filterVehicles(String query) {
+    setState(() {
+      if (query.isEmpty) {
+        filteredVehicles = vehicles;
+      } else {
+        filteredVehicles = vehicles.where((car) {
+          final title = car['title'].toString().toLowerCase();
+          final year = car['year'].toString().toLowerCase();
+          final input = query.toLowerCase();
+          return title.contains(input) || year.contains(input);
+        }).toList();
+      }
+    });
   }
 
   Future<void> addVehicle(String title, String year, String price, String km, String image) async {
@@ -79,7 +99,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
       );
       fetchVehicles();
     } catch (e) {
-      // Tratar exceção
+      // Tratar excecao
     }
   }
 
@@ -95,7 +115,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
       );
       fetchVehicles();
     } catch (e) {
-      // Tratar exceção
+      // Tratar excecao
     }
   }
 
@@ -151,8 +171,34 @@ class _CatalogScreenState extends State<CatalogScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: const Color(0xFF1E293B),
-        title: const Text('StarCar'),
+        title: isSearching
+            ? TextField(
+                controller: searchController,
+                autofocus: true,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  hintText: 'Buscar por modelo ou ano...',
+                  hintStyle: TextStyle(color: Colors.white54),
+                  border: InputBorder.none,
+                ),
+                onChanged: _filterVehicles,
+              )
+            : const Text('StarCar'),
         actions: [
+          IconButton(
+            icon: Icon(isSearching ? Icons.close : Icons.search),
+            onPressed: () {
+              setState(() {
+                if (isSearching) {
+                  isSearching = false;
+                  searchController.clear();
+                  filteredVehicles = vehicles;
+                } else {
+                  isSearching = true;
+                }
+              });
+            },
+          ),
           IconButton(
             icon: Icon(
               isPresentationMode ? Icons.visibility_off : Icons.visibility,
@@ -168,8 +214,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
-          : vehicles.isEmpty
-              ? const Center(child: Text('Nenhum veículo cadastrado na planilha.'))
+          : filteredVehicles.isEmpty
+              ? const Center(child: Text('Nenhum veículo encontrado.'))
               : GridView.builder(
                   padding: const EdgeInsets.all(12),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -178,9 +224,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
                     crossAxisSpacing: 12,
                     mainAxisSpacing: 12,
                   ),
-                  itemCount: vehicles.length,
+                  itemCount: filteredVehicles.length,
                   itemBuilder: (context, index) {
-                    final item = vehicles[index];
+                    final item = filteredVehicles[index];
                     return Card(
                       color: const Color(0xFF1E293B),
                       child: Stack(
