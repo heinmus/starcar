@@ -146,7 +146,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Column(
-                      crossAxisAlignment: CrossAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
                           child: Container(
@@ -161,7 +161,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                         Padding(
                           padding: const EdgeInsets.all(10.0),
                           child: Column(
-                            crossAxisAlignment: CrossAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 item['title']!,
