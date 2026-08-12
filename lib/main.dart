@@ -1,6 +1,8 @@
+import 'dart0:convert' if (dart.library.html) 'dart:html';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   runApp(const StarCarApp());
@@ -38,6 +40,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
   bool isPresentationMode = false;
   bool isLoading = true;
   bool isSearching = false;
+
+  // CONFIGURE O NÚMERO DO WHATSAPP DA LOJA AQUI (Com DDD e 55 do Brasil)
+  final String whatsappNumber = "5581999999999"; 
 
   List<Map<String, dynamic>> vehicles = [];
   List<Map<String, dynamic>> filteredVehicles = [];
@@ -81,6 +86,21 @@ class _CatalogScreenState extends State<CatalogScreen> {
         }).toList();
       }
     });
+  }
+
+  Future<void> _openWhatsApp(Map<String, dynamic> car) async {
+    final String message = "Olá! Gostaria de mais informações sobre o veículo *${car['title']}* (${car['year']}) - Valor: ${car['price']}.";
+    final Uri url = Uri.parse("https://wa.me/$whatsappNumber?text=${Uri.encodeComponent(message)}");
+
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Não foi possível abrir o WhatsApp.')),
+        );
+      }
+    }
   }
 
   Future<void> addVehicle(String title, String year, String price, String km, String image) async {
@@ -289,7 +309,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   padding: const EdgeInsets.all(12),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
-                    childAspectRatio: 0.72,
+                    childAspectRatio: 0.68,
                     crossAxisSpacing: 12,
                     mainAxisSpacing: 12,
                   ),
@@ -325,6 +345,20 @@ class _CatalogScreenState extends State<CatalogScreen> {
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
                                         color: isPresentationMode ? Colors.amber : Colors.greenAccent,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: ElevatedButton.icon(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF25D366),
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(vertical: 4),
+                                        ),
+                                        onPressed: () => _openWhatsApp(item),
+                                        icon: const Icon(Icons.chat, size: 16),
+                                        label: const Text('Falar na Loja', style: TextStyle(fontSize: 12)),
                                       ),
                                     ),
                                   ],
