@@ -1,5 +1,5 @@
 name: starcar
-description: "Aplicativo de Gestão e Catálogo StarCar"
+description: "Aplicativo de catálogo e gestão de veículos StarCar."
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -9,12 +9,13 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.6
+  cupertino_icons: ^1.0.8
+  http: ^1.2.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.0
+  flutter_lints: ^4.0.0
 
 flutter:
   uses-material-design: true
